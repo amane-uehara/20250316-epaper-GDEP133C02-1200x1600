@@ -1,0 +1,6 @@
+[Unit]
+Description=Ensure USB is mounted at /mnt/usb (read-only)
+
+[Service]
+Type=oneshot
+ExecStart=/home/amane/root-usb/usb-ensure-mounted.sh

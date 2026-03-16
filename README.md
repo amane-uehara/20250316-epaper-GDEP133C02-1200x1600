@@ -30,6 +30,7 @@ epd_uart_rx_photo/
 ├── send_image.py    # 画像送信スクリプト → Raspberry Piに配置し、ESP32-S2に画像データを送信する
 ├── CMakeLists.txt   # ESP-IDFビルド設定
 ├── sdkconfig        # ESP-IDF設定
+├── root-usb         # Raspberry PiでUSBメモリを常にRead Onlyモードでmountするための設定
 └── README.md        # 本ドキュメント
 ```
 
