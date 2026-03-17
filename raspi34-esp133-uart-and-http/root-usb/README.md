@@ -12,6 +12,13 @@
 - USBは原則1本だけ刺さる想定（複数同時は未対応）
 - ユーザー名はhoge
 
+## このディレクトリ
+
+* README.md (このファイル)
+* usb-ensure-mounted.sh (起動時 & USB挿入時にROOT権限で実行すべきスクリプト)
+* etc___systemd___system___usb-ensure-mounted.service (CRONが使える場合は不要、systemd用)
+* etc___udev___rules.d___99-usb-auto-mount.rules (CRONが使える場合は不要、systemd用)
+
 ---
 
 ## 0. 状態確認（USBが見えているか）
