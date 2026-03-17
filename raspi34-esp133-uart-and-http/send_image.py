@@ -446,35 +446,82 @@ def send_to_epd(payload: bytes, port: str, baudrate: int = 921600) -> bool:
         os.close(fd)
 
 
-def send_to_epd_http(payload: bytes, url: str) -> bool:
+def send_to_epd_http(payload: bytes, url: str, max_retries: int = 2) -> bool:
     """HTTPで画像データを送信"""
-    import urllib.request
+    import http.client
+    import socket
+    from urllib.parse import urlparse
 
     crc = zlib.crc32(payload) & 0xFFFFFFFF
     hdr = b"E6UP" + struct.pack("<BHHBI", 1, EPD_WIDTH, EPD_HEIGHT, 0, len(payload)) + struct.pack("<I", crc)
     data = hdr + payload
 
-    target = url.rstrip('/') + '/image'
-    print(f"HTTP送信中: {target} ({len(data)} bytes)")
+    parsed = urlparse(url)
+    host = parsed.hostname
+    port = parsed.port or 80
+    path = (parsed.path.rstrip('/') if parsed.path else '') + '/image'
 
-    req = urllib.request.Request(
-        target,
-        data=data,
-        method='POST',
-        headers={'Content-Type': 'application/octet-stream'},
-    )
+    print(f"HTTP送信中: http://{host}:{port}{path} ({len(data)} bytes)")
 
+    # ESP32のWiFiパワーセーブを解除するためウォームアップ
     try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        warm = http.client.HTTPConnection(host, port, timeout=10)
+        warm.request('GET', '/status')
+        resp = warm.getresponse()
+        resp.read()
+        warm.close()
+        print(f"  ESP32接続確認OK")
+    except Exception as e:
+        print(f"  ウォームアップ失敗（続行）: {e}")
+        time.sleep(2)
+
+    for attempt in range(max_retries + 1):
+        if attempt > 0:
+            wait = 3 * attempt
+            print(f"リトライ {attempt}/{max_retries} ({wait}秒後)...")
+            time.sleep(wait)
+
+        try:
+            conn = http.client.HTTPConnection(host, port, timeout=120)
+            conn.connect()
+
+            # TCP_NODELAYで小さなパケットの遅延を防ぐ
+            conn.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+
+            # ヘッダーを明示的に送信
+            conn.putrequest('POST', path)
+            conn.putheader('Content-Type', 'application/octet-stream')
+            conn.putheader('Content-Length', str(len(data)))
+            conn.putheader('Connection', 'close')
+            conn.endheaders()
+
+            # データをチャンクに分けて送信（ESP32のTCPバッファに配慮）
+            chunk_size = 4096
+            sent = 0
+            for i in range(0, len(data), chunk_size):
+                chunk = data[i:i + chunk_size]
+                conn.sock.sendall(chunk)
+                sent += len(chunk)
+                if sent % (chunk_size * 50) == 0 or sent == len(data):
+                    print(f"\r  送信中... {sent}/{len(data)} ({100*sent//len(data)}%)", end="", flush=True)
+            print()
+
+            resp = conn.getresponse()
             body = resp.read().decode(errors='ignore').strip()
             print(f"応答: {resp.status} {body}")
+            conn.close()
             return resp.status == 200
-    except urllib.error.HTTPError as e:
-        print(f"HTTPエラー: {e.code} {e.read().decode(errors='ignore').strip()}")
-        return False
-    except Exception as e:
-        print(f"送信エラー: {e}")
-        return False
+
+        except Exception as e:
+            print(f"送信エラー: {e}")
+            try:
+                conn.close()
+            except Exception:
+                pass
+            if attempt >= max_retries:
+                return False
+
+    return False
 
 
 def save_preview(palette_data: list, output_path: str):
