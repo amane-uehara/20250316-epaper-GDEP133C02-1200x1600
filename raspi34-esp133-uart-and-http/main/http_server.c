@@ -181,8 +181,8 @@ esp_err_t http_server_start(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = 16384;         // EPD描画がスタックを使うため大きめに
-    config.recv_wait_timeout = 60;     // 高レイテンシ環境での大容量受信用
-    config.send_wait_timeout = 60;
+    config.recv_wait_timeout = 30;     // 大きなペイロード受信用
+    config.send_wait_timeout = 30;
 
     ESP_LOGI(TAG, "Starting HTTP server on port %d", config.server_port);
 
